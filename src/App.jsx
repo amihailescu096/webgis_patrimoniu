@@ -6,6 +6,7 @@ import BasemapSelector from './components/BasemapSelector'
 import GeoMilBasemap from './components/GeoMilBasemap'
 import NominatimSearch from './components/NominatimSearch'
 import GeoJsonDashboard from './components/GeoJsonDashboard'
+import L from 'leaflet'
 
 function App() {
   const [monumentePunct, setMonumentePunct] = useState(null)
@@ -115,6 +116,15 @@ const [basemap, setBasemap] = useState('osm')
 {showPuncte && monumentePunct && (
   <GeoJSON
     data={monumentePunct}
+    pointToLayer={(_feature, latlng) =>
+      L.circleMarker(latlng, {
+        radius: 6,
+        color: '#ffffff',
+        weight: 2,
+        fillColor: '#c62828',
+        fillOpacity: 1,
+      })
+    }
     onEachFeature={popupMonument}
   />
 )}
