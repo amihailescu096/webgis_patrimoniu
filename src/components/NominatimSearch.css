@@ -1,0 +1,50 @@
+.nominatim-search {
+  position: absolute;
+  top: 10px;
+  left: 60px;
+  z-index: 1000;
+
+  width: 340px;
+  background: white;
+  padding: 12px 14px;
+  border-radius: 8px;
+
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.nominatim-search h3 {
+  margin: 0 0 10px 0;
+  font-size: 15px;
+}
+
+.nominatim-search-row {
+  display: flex;
+  gap: 6px;
+}
+
+.nominatim-search-row input {
+  flex: 1;
+  padding: 7px 8px;
+}
+
+.nominatim-search-row button {
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.nominatim-results {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nominatim-result {
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+}
