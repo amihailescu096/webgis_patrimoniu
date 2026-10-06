@@ -8,9 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "node server/server.js",
-    "server": "node --env-file=.env server/server.js",
-    "test": "node --test src/geojson.test.js server/server.test.js"
+    "test": "node --test src/geojson.test.js src/publication.test.js"
   },
   "dependencies": {
     "esri-leaflet": "^3.0.19",

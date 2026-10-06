@@ -1,16 +1,13 @@
-import { useState } from 'react'
-export default function SharingPanel({ owner, publicView, busy, dirty, revision, mapId, title, onTitle, onLogin, onLogout, onSave }) {
-  const [password, setPassword] = useState('')
-  const [showLogin, setShowLogin] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const link = new URL(`?map=${mapId}`, window.location.origin).href
+export default function SharingPanel({ owner, busy, dirty, title, onTitle, onSave }) {
+  const link = new URL(import.meta.env.BASE_URL, window.location.origin).href
   return <section className="sharing-panel">
-    {publicView ? <><strong>Hartă partajată · doar vizualizare</strong><p>Poți explora straturile și tabelul. Configurația publicată poate fi modificată doar de administrator.</p><a href="/">Administrare</a></> : owner ? <>
+    {owner ? <><strong>Editor · copie locală</strong>
       <label>Titlul hărții<input disabled={busy} value={title} maxLength={200} onChange={event => onTitle(event.target.value)} /></label>
-      <button disabled={busy} onClick={onSave}>{busy ? 'Se salvează / încarcă…' : 'Salvează și publică harta'}</button>
-      <p role="status">{dirty ? 'Ai modificări nesalvate.' : revision ? 'Versiunea publicată este salvată pe server.' : 'Publică harta pentru a activa partajarea.'}</p>
-      {revision > 0 && <><label>Link pentru vizualizare<input readOnly value={link} onFocus={event => event.target.select()} /></label><button disabled={busy} onClick={async () => { try { await navigator.clipboard.writeText(link); setCopied(true) } catch { setCopied(false) } }}>{copied ? 'Link copiat' : 'Copiază linkul'}</button><p>Oricine are linkul poate vedea și descărca datele publicate. Modificările devin vizibile după salvare și reîncărcarea paginii.</p></>}
-      <button disabled={busy} onClick={onLogout}>Deconectare</button>
-    </> : <><strong>Administrarea hărții</strong><p>Autentifică-te pentru a importa și publica straturi.</p><button disabled={busy} onClick={() => setShowLogin(!showLogin)}>Autentificare administrator</button>{showLogin && <form onSubmit={async event => { event.preventDefault(); await onLogin(password); setPassword('') }}><label>Parola administratorului<input type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required maxLength={1024} /></label><button disabled={busy || !password}>Intră</button></form>}</>}
+      <button disabled={busy} onClick={onSave}>Exportă pachetul pentru GitHub</button>
+      <p role="status">{dirty ? 'Ai modificări neexportate.' : 'Modificările se publică doar prin repository.'}</p>
+      <p>Dezarhivează pachetul și înlocuiește fișierele din public/data în GitHub. Numai persoanele cu acces de scriere pot actualiza harta publică. Copia din editor se pierde la reîncărcare; exportă înainte de a închide.</p>
+      <a href={link}>Vezi harta publicată</a>
+    </> : <><strong>Hartă publică · doar vizualizare</strong><p>Explorează straturile și tabelul de atribute.</p><a href="?edit=1">Pregătește o copie pentru publicare</a></>}
+    <label>Link public<input readOnly value={link} onFocus={event => event.target.select()} /></label>
   </section>
 }

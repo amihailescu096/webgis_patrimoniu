@@ -8,7 +8,7 @@ import { featureName, layerMetadata } from './geojson'
 import { importFile } from './importFile.js'
 import AttributeTable from './AttributeTable.jsx'
 import SharingPanel from './SharingPanel.jsx'
-import { api, loadMap, saveMap } from './sharing.js'
+import { loadMap, exportMap } from './sharing.js'
 
 const colors = ['#3979d5', '#8b5bc7', '#2a9679', '#e99a24', '#c64f56']
 function MapLayers({ layers, focus, onSelect }) {
@@ -78,53 +78,30 @@ function App() {
   const [tableId, setTableId] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const fileInput = useRef(null)
-  const [owner, setOwner] = useState(false)
+  const owner = new URLSearchParams(window.location.search).get('edit') === '1'
   const [busy, setBusy] = useState(true)
-  const [mapId, setMapId] = useState(null)
-  const [revision, setRevision] = useState(0)
   const [title, setTitle] = useState('Harta mea')
   const [dirty, setDirty] = useState(false)
-  const [publicView] = useState(() => !!new URLSearchParams(window.location.search).get('map'))
+  const publicView = !owner
   const canEdit = owner && !publicView && !busy && !importing
   useEffect(() => {
     let active = true
     async function initialize() {
       try {
-        const session = await api('/session')
-        const id = new URLSearchParams(window.location.search).get('map') || session.mapId
-        const saved = id ? await loadMap(id) : null
+        const saved = await loadMap()
         if (!active) return
-        setOwner(session.owner)
-        if (saved) { setMapId(saved.id); setRevision(saved.revision); setTitle(saved.title); setBasemap(saved.basemap); setLayers(saved.layers); setFocus({ data: { features: saved.layers.flatMap(layer => layer.data.features) } }) }
+        if (saved) { setTitle(saved.title); setBasemap(saved.basemap); setLayers(saved.layers); setFocus({ data: { features: saved.layers.flatMap(layer => layer.data.features) } }) }
       } catch (error) { if (active) setErrors([`Nu s-a putut încărca harta: ${error.message}`]) }
       finally { if (active) setBusy(false) }
     }
     initialize()
     return () => { active = false }
   }, [])
-  async function login(password) {
-    setBusy(true)
-    try {
-      const session = await api('/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) })
-      const saved = await loadMap(session.mapId)
-      setOwner(true); setMapId(saved.id); setRevision(saved.revision); setTitle(saved.title); setBasemap(saved.basemap); setLayers(saved.layers); setDirty(false); setErrors([])
-    } catch (error) { setErrors([error.message]) }
-    finally { setBusy(false) }
-  }
-  async function logout() {
-    setBusy(true)
-    try { await api('/logout', { method: 'POST' }); setOwner(false); setLayers([]); setSelected(null); setTableId(null); setDirty(false) }
-    catch (error) { setErrors([error.message]) }
-    finally { setBusy(false) }
-  }
   async function publish() {
     if (!canEdit) return
     setBusy(true)
-    try {
-      const saved = await saveMap(mapId, revision, title, basemap, layers)
-      setLayers(previous => previous.map(layer => ({ ...layer, blobId: saved.layers.find(item => item.id === layer.id).blobId })))
-      setRevision(saved.revision); setDirty(false); setErrors([])
-    } catch (error) { setErrors([error.message]) }
+    try { await exportMap(title, basemap, layers); setDirty(false); setErrors([]) }
+    catch (error) { setErrors([error.message]) }
     finally { setBusy(false) }
   }
   async function importFiles(files) {
@@ -153,8 +130,8 @@ function App() {
     <div className={`app ${sidebarOpen ? '' : 'app--collapsed'}`}>
       <aside className="sidebar" aria-label="Straturile hărții" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); if (canEdit) importFiles(Array.from(event.dataTransfer.files)) }}>
         <header className="brand"><span className="brand-icon">◈</span><div><small>EXPLORATOR GEOGRAFIC</small><h1>{title}</h1></div></header>
-        <SharingPanel owner={owner} publicView={publicView} busy={busy || importing} dirty={dirty} revision={revision} mapId={mapId} title={title} onTitle={value => { setTitle(value); setDirty(true) }} onLogin={login} onLogout={logout} onSave={publish} />
-        {busy && <p role="status">Se încarcă / salvează harta…</p>}
+        <SharingPanel owner={owner} publicView={publicView} busy={busy || importing} dirty={dirty} title={title} onTitle={value => { setTitle(value); setDirty(true) }} onSave={publish} />
+        {busy && <p role="status">Se pregătește harta…</p>}
         <p className="intro">Locuri, contururi și povești. Toate pe o singură hartă.</p>
         <label className="search"><span>Caută în straturile vizibile</span><input type="search" placeholder="Denumire, localitate, cod LMI…" value={query} onChange={event => setQuery(event.target.value)} /></label>
         {owner && !publicView && <><button className="import-button" disabled={!canEdit} onClick={() => fileInput.current.click()}>{importing ? 'Se importă…' : '+ Importă GeoJSON'}</button>
@@ -169,7 +146,7 @@ function App() {
           {expanded === layer.id && <div className="layer-options"><label>Nume strat<input disabled={!canEdit} value={layer.name} onChange={event => update(layer.id, { name: event.target.value })} /></label><label>Numele obiectelor din coloana<select disabled={!canEdit} value={layer.labelField} onChange={event => update(layer.id, { labelField: event.target.value })}><option value="">Automat</option>{layer.columns.map(column => <option key={column} value={column}>{column}</option>)}</select></label><button className="table-open" onClick={() => setTableId(layer.id)}>Deschide tabelul de atribute</button><div className="layer-tools"><label>Culoare <input disabled={!canEdit} type="color" value={layer.color} onChange={event => update(layer.id, { color: event.target.value })} /></label><button onClick={() => download(layer)}>Exportă</button>{owner && !publicView && <button disabled={!canEdit} onClick={() => { setDirty(true); setLayers(previous => previous.filter(item => item.id !== layer.id)); if (selected?.layerId === layer.id) setSelected(null) }}>Elimină</button>}</div><div className="feature-list">{layer.data.features.slice(0, 100).map((feature, index) => <button key={index} onClick={() => select(layer, feature)}>{featureName(feature, index, layer.labelField)}</button>)}{layer.data.features.length > 100 && <p className="hint">Caută după atribute pentru a găsi alte obiecte.</p>}</div></div>}
         </section>)}</div>
         {query.trim() && <section className="results"><h2>Rezultatele căutării</h2>{results.length ? results.map(({ layer, feature, index }) => <button key={`${layer.id}-${index}`} onClick={() => select(layer, feature)}>{featureName(feature, index, layer.labelField)}<small>{layer.name}</small></button>) : <p>Nu s-au găsit obiecte.</p>}<p className="hint">Se afișează maximum 50 de rezultate.</p></section>}
-        <footer><label>Hartă de bază<select value={basemap} disabled={busy} onChange={event => { setBasemap(event.target.value); if (owner && !publicView) setDirty(true) }}><option value="streets">OpenStreetMap</option><option value="satellite">Satelit · Esri</option></select></label><p>{owner && !publicView ? 'Folosește Salvează și publică harta pentru a păstra straturile și configurația pe server.' : 'Modificările de vizibilitate și hartă de bază sunt doar pentru vizualizarea ta.'}</p></footer>
+        <footer><label>Hartă de bază<select value={basemap} disabled={busy} onChange={event => { setBasemap(event.target.value); if (owner && !publicView) setDirty(true) }}><option value="streets">OpenStreetMap</option><option value="satellite">Satelit · Esri</option></select></label><p>{owner && !publicView ? 'Exportă pachetul și încarcă fișierele în repository pentru a publica modificările.' : 'Modificările de vizibilitate și hartă de bază sunt doar pentru vizualizarea ta.'}</p></footer>
       </aside>
       <main className="map-area" aria-label="Hartă interactivă">
         <MapContainer center={[45.15, 26.82]} zoom={9} zoomControl={false} preferCanvas={true}>
