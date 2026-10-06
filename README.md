@@ -1,16 +1,26 @@
-# React + Vite
+# Harta mea · GeoJSON
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicație React și Leaflet cu o interfață de hartă și straturi, în stil Google My Maps. Pornește fără date preîncărcate, fără statistici și fără grafice.
 
-Currently, two official plugins are available:
+## Utilizare
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Importă unul sau mai multe fișiere `.geojson` / `.json`, prin buton sau tragere în panoul lateral.
+- Sunt acceptate FeatureCollection, Feature, geometrii simple, multiple și GeometryCollection în WGS84 (EPSG:4326), maximum 25 MB per fișier.
+- Activează/ascunde straturi și centrează harta pe un strat sau pe toate straturile vizibile.
+- Deschide un strat pentru redenumire, culoare, export sau eliminare.
+- Caută în atributele straturilor vizibile și selectează un obiect pentru centrare și detalii.
+- Alege OpenStreetMap sau imaginile satelit Esri.
 
-## React Compiler
+Fișierele importate sunt citite local, în browser, și nu sunt trimise unui server. Straturile sunt păstrate numai pentru sesiunea curentă; exportă-le înainte de reîncărcarea/închiderea paginii. Hărțile de bază necesită internet și solicită tile-uri furnizorilor corespunzători.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Dezvoltare
 
-## Expanding the ESLint configuration
+```sh
+npm ci
+npm run dev
+npm run build
+npm run lint
+node --test src/geojson.test.js
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Pentru publicare într-un subdirector, configurează `base` în `vite.config.js` conform adresei finale.
