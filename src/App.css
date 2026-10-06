@@ -73,3 +73,9 @@ dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
 .table-pagination input { width: 65px; padding: 6px; border: 1px solid #dce3eb; }
 .render-status { position: absolute; z-index: 450; bottom: 85px; right: 20px; background: white; border-radius: 6px; padding: 10px; font-size: 12px; }
 @media (max-width: 900px) { .attribute-table { left: 10px; right: 10px; } }
+.sharing-panel { margin-top: 18px; padding: 13px; background: #eff5ff; border: 1px solid #dce3eb; border-radius: 8px; font-size: 12px; }
+.sharing-panel label { display: block; margin: 8px 0; }
+.sharing-panel input { width: 100%; padding: 8px; border: 1px solid #dce3eb; border-radius: 5px; margin-top: 5px; }
+.sharing-panel button { padding: 8px 10px; border: 1px solid #cbdaf0; border-radius: 5px; background: white; color: #3979d5; margin: 3px 5px 3px 0; }
+.sharing-panel p { font-size: 11px; line-height: 1.5; color: #667485; }
+select:disabled, input:disabled { opacity: .75; }

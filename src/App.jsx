@@ -7,6 +7,8 @@ import { featureName, layerMetadata } from './geojson'
 
 import { importFile } from './importFile.js'
 import AttributeTable from './AttributeTable.jsx'
+import SharingPanel from './SharingPanel.jsx'
+import { api, loadMap, saveMap } from './sharing.js'
 
 const colors = ['#3979d5', '#8b5bc7', '#2a9679', '#e99a24', '#c64f56']
 function MapLayers({ layers, focus, onSelect }) {
@@ -18,7 +20,7 @@ function MapLayers({ layers, focus, onSelect }) {
   }, [map])
   useEffect(() => {
     if (!focus) return
-    const bounds = L.latLngBounds(focus.bounds ?? layerMetadata(focus.data.type === 'Feature' ? { features: [focus.data] } : focus.data).bounds ?? [])
+    const bounds = L.latLngBounds(focus.bounds ?? layerMetadata(focus.data?.type === 'Feature' ? { features: [focus.data] } : (focus.data ?? { features: [] })).bounds ?? [])
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [35, 35], maxZoom: 17 })
   }, [focus, map])
   return layers.map(layer => <RenderedLayer key={layer.id} data={layer.data} id={layer.id} color={layer.color} visible={layer.visible} onSelect={onSelect} />)
@@ -76,7 +78,57 @@ function App() {
   const [tableId, setTableId] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const fileInput = useRef(null)
+  const [owner, setOwner] = useState(false)
+  const [busy, setBusy] = useState(true)
+  const [mapId, setMapId] = useState(null)
+  const [revision, setRevision] = useState(0)
+  const [title, setTitle] = useState('Harta mea')
+  const [dirty, setDirty] = useState(false)
+  const [publicView] = useState(() => !!new URLSearchParams(window.location.search).get('map'))
+  const canEdit = owner && !publicView && !busy && !importing
+  useEffect(() => {
+    let active = true
+    async function initialize() {
+      try {
+        const session = await api('/session')
+        const id = new URLSearchParams(window.location.search).get('map') || session.mapId
+        const saved = id ? await loadMap(id) : null
+        if (!active) return
+        setOwner(session.owner)
+        if (saved) { setMapId(saved.id); setRevision(saved.revision); setTitle(saved.title); setBasemap(saved.basemap); setLayers(saved.layers); setFocus({ data: { features: saved.layers.flatMap(layer => layer.data.features) } }) }
+      } catch (error) { if (active) setErrors([`Nu s-a putut încărca harta: ${error.message}`]) }
+      finally { if (active) setBusy(false) }
+    }
+    initialize()
+    return () => { active = false }
+  }, [])
+  async function login(password) {
+    setBusy(true)
+    try {
+      const session = await api('/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) })
+      const saved = await loadMap(session.mapId)
+      setOwner(true); setMapId(saved.id); setRevision(saved.revision); setTitle(saved.title); setBasemap(saved.basemap); setLayers(saved.layers); setDirty(false); setErrors([])
+    } catch (error) { setErrors([error.message]) }
+    finally { setBusy(false) }
+  }
+  async function logout() {
+    setBusy(true)
+    try { await api('/logout', { method: 'POST' }); setOwner(false); setLayers([]); setSelected(null); setTableId(null); setDirty(false) }
+    catch (error) { setErrors([error.message]) }
+    finally { setBusy(false) }
+  }
+  async function publish() {
+    if (!canEdit) return
+    setBusy(true)
+    try {
+      const saved = await saveMap(mapId, revision, title, basemap, layers)
+      setLayers(previous => previous.map(layer => ({ ...layer, blobId: saved.layers.find(item => item.id === layer.id).blobId })))
+      setRevision(saved.revision); setDirty(false); setErrors([])
+    } catch (error) { setErrors([error.message]) }
+    finally { setBusy(false) }
+  }
   async function importFiles(files) {
+    if (!canEdit) return
     setImporting(true)
     const added = []
     const failures = []
@@ -87,34 +139,37 @@ function App() {
       } catch (error) { failures.push(`${file.name}: ${error.message}`) }
     }
     setLayers(previous => [...previous, ...added])
+    if (added.length) setDirty(true)
     setErrors(failures)
     if (added.length) { setFocus({ data: { type: 'FeatureCollection', features: added.flatMap(layer => layer.data.features) } }); setExpanded(added[0].id) }
     setImporting(false)
     if (fileInput.current) fileInput.current.value = ''
   }
-  function update(id, changes) { setLayers(previous => previous.map(layer => layer.id === id ? { ...layer, ...changes } : layer)) }
+  function update(id, changes) { if (!canEdit) return; setDirty(true); setLayers(previous => previous.map(layer => layer.id === id ? { ...layer, ...changes } : layer)) }
   const selectedLayer = layers.find(layer => layer.id === selected?.layerId)
   const results = useMemo(() => query.trim() ? layers.filter(layer => layer.visible).flatMap(layer => layer.data.features.map((feature, index) => ({ layer, feature, index })).filter(({ feature }) => JSON.stringify(feature.properties ?? {}).toLocaleLowerCase('ro').includes(query.toLocaleLowerCase('ro')))).slice(0, 50) : [], [layers, query])
   function select(layer, feature) { setSelected({ layerId: layer.id, feature }); setFocus({ data: feature }) }
   return (
     <div className={`app ${sidebarOpen ? '' : 'app--collapsed'}`}>
-      <aside className="sidebar" aria-label="Straturile hărții" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); if (!importing) importFiles(Array.from(event.dataTransfer.files)) }}>
-        <header className="brand"><span className="brand-icon">◈</span><div><small>EXPLORATOR GEOGRAFIC</small><h1>Harta mea</h1></div></header>
+      <aside className="sidebar" aria-label="Straturile hărții" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); if (canEdit) importFiles(Array.from(event.dataTransfer.files)) }}>
+        <header className="brand"><span className="brand-icon">◈</span><div><small>EXPLORATOR GEOGRAFIC</small><h1>{title}</h1></div></header>
+        <SharingPanel owner={owner} publicView={publicView} busy={busy || importing} dirty={dirty} revision={revision} mapId={mapId} title={title} onTitle={value => { setTitle(value); setDirty(true) }} onLogin={login} onLogout={logout} onSave={publish} />
+        {busy && <p role="status">Se încarcă / salvează harta…</p>}
         <p className="intro">Locuri, contururi și povești. Toate pe o singură hartă.</p>
         <label className="search"><span>Caută în straturile vizibile</span><input type="search" placeholder="Denumire, localitate, cod LMI…" value={query} onChange={event => setQuery(event.target.value)} /></label>
-        <button className="import-button" disabled={importing} onClick={() => fileInput.current.click()}>{importing ? 'Se importă…' : '+ Importă GeoJSON'}</button>
+        {owner && !publicView && <><button className="import-button" disabled={!canEdit} onClick={() => fileInput.current.click()}>{importing ? 'Se importă…' : '+ Importă GeoJSON'}</button>
         <input ref={fileInput} className="file-input" type="file" accept=".geojson,.json,application/geo+json,application/json" multiple onChange={event => importFiles(Array.from(event.target.files))} />
-        <p className="hint">Sau trage fișierele aici · WGS84 · maximum 150 MB/fișier</p>
+        <p className="hint">Sau trage fișierele aici · WGS84 · maximum 150 MB/fișier</p></>}
         {!!errors.length && <div className="errors" role="alert">{errors.map((error, index) => <p key={index}>{error}</p>)}<button onClick={() => setErrors([])}>Închide mesajele</button></div>}
         <div className="layer-heading"><h2>Straturile mele</h2><button onClick={() => setFocus({ data: { type: 'FeatureCollection', features: layers.filter(layer => layer.visible).flatMap(layer => layer.data.features) } })}>Vezi toate</button></div>
         
-        {!layers.length && <p className="empty">Importă un fișier GeoJSON pentru a începe.</p>}
+        {!layers.length && <p className="empty">{owner && !publicView ? 'Importă un fișier GeoJSON pentru a începe.' : 'Harta nu are straturi publicate.'}</p>}
         <div className="layer-list">{layers.map(layer => <section className="layer-card" key={layer.id}>
-          <div className="layer-title"><input type="checkbox" checked={layer.visible} aria-label={`Afișează ${layer.name}`} onChange={event => update(layer.id, { visible: event.target.checked })} /><span className="swatch" style={{ background: layer.color }} /><button className="layer-name" aria-expanded={expanded === layer.id} onClick={() => setExpanded(expanded === layer.id ? null : layer.id)}>{layer.name}</button><button aria-label={`Centrează ${layer.name}`} title="Centrează stratul" onClick={() => setFocus({ bounds: layer.bounds })}>⌖</button></div>
-          {expanded === layer.id && <div className="layer-options"><label>Nume strat<input value={layer.name} onChange={event => update(layer.id, { name: event.target.value })} /></label><label>Numele obiectelor din coloana<select value={layer.labelField} onChange={event => update(layer.id, { labelField: event.target.value })}><option value="">Automat</option>{layer.columns.map(column => <option key={column} value={column}>{column}</option>)}</select></label><button className="table-open" onClick={() => setTableId(layer.id)}>Deschide tabelul de atribute</button><div className="layer-tools"><label>Culoare <input type="color" value={layer.color} onChange={event => update(layer.id, { color: event.target.value })} /></label><button onClick={() => download(layer)}>Exportă</button><button onClick={() => { setLayers(previous => previous.filter(item => item.id !== layer.id)); if (selected?.layerId === layer.id) setSelected(null) }}>Elimină</button></div><div className="feature-list">{layer.data.features.slice(0, 100).map((feature, index) => <button key={index} onClick={() => select(layer, feature)}>{featureName(feature, index, layer.labelField)}</button>)}{layer.data.features.length > 100 && <p className="hint">Caută după atribute pentru a găsi alte obiecte.</p>}</div></div>}
+          <div className="layer-title"><input type="checkbox" checked={layer.visible} aria-label={`Afișează ${layer.name}`} disabled={busy} onChange={event => { setLayers(previous => previous.map(item => item.id === layer.id ? { ...item, visible: event.target.checked } : item)); if (owner && !publicView) setDirty(true) }} /><span className="swatch" style={{ background: layer.color }} /><button className="layer-name" aria-expanded={expanded === layer.id} onClick={() => setExpanded(expanded === layer.id ? null : layer.id)}>{layer.name}</button><button aria-label={`Centrează ${layer.name}`} title="Centrează stratul" onClick={() => setFocus({ bounds: layer.bounds })}>⌖</button></div>
+          {expanded === layer.id && <div className="layer-options"><label>Nume strat<input disabled={!canEdit} value={layer.name} onChange={event => update(layer.id, { name: event.target.value })} /></label><label>Numele obiectelor din coloana<select disabled={!canEdit} value={layer.labelField} onChange={event => update(layer.id, { labelField: event.target.value })}><option value="">Automat</option>{layer.columns.map(column => <option key={column} value={column}>{column}</option>)}</select></label><button className="table-open" onClick={() => setTableId(layer.id)}>Deschide tabelul de atribute</button><div className="layer-tools"><label>Culoare <input disabled={!canEdit} type="color" value={layer.color} onChange={event => update(layer.id, { color: event.target.value })} /></label><button onClick={() => download(layer)}>Exportă</button>{owner && !publicView && <button disabled={!canEdit} onClick={() => { setDirty(true); setLayers(previous => previous.filter(item => item.id !== layer.id)); if (selected?.layerId === layer.id) setSelected(null) }}>Elimină</button>}</div><div className="feature-list">{layer.data.features.slice(0, 100).map((feature, index) => <button key={index} onClick={() => select(layer, feature)}>{featureName(feature, index, layer.labelField)}</button>)}{layer.data.features.length > 100 && <p className="hint">Caută după atribute pentru a găsi alte obiecte.</p>}</div></div>}
         </section>)}</div>
         {query.trim() && <section className="results"><h2>Rezultatele căutării</h2>{results.length ? results.map(({ layer, feature, index }) => <button key={`${layer.id}-${index}`} onClick={() => select(layer, feature)}>{featureName(feature, index, layer.labelField)}<small>{layer.name}</small></button>) : <p>Nu s-au găsit obiecte.</p>}<p className="hint">Se afișează maximum 50 de rezultate.</p></section>}
-        <footer><label>Hartă de bază<select value={basemap} onChange={event => setBasemap(event.target.value)}><option value="streets">OpenStreetMap</option><option value="satellite">Satelit · Esri</option></select></label><p>Importurile rămân în această sesiune. Exportă straturile înainte de închiderea paginii.</p></footer>
+        <footer><label>Hartă de bază<select value={basemap} disabled={busy} onChange={event => { setBasemap(event.target.value); if (owner && !publicView) setDirty(true) }}><option value="streets">OpenStreetMap</option><option value="satellite">Satelit · Esri</option></select></label><p>{owner && !publicView ? 'Folosește Salvează și publică harta pentru a păstra straturile și configurația pe server.' : 'Modificările de vizibilitate și hartă de bază sunt doar pentru vizualizarea ta.'}</p></footer>
       </aside>
       <main className="map-area" aria-label="Hartă interactivă">
         <MapContainer center={[45.15, 26.82]} zoom={9} zoomControl={false} preferCanvas={true}>
@@ -126,7 +181,7 @@ function App() {
         <div className="map-caption">HARTA MEA <span>O perspectivă asupra locurilor</span></div>
         {selected && selectedLayer && <section className="details" aria-label="Detalii obiect"><button className="close" aria-label="Închide detaliile" onClick={() => setSelected(null)}>×</button><small>{selectedLayer.name}</small><h2>{featureName(selected.feature, selectedLayer.data.features.indexOf(selected.feature), selectedLayer.labelField)}</h2><dl>{Object.entries(selected.feature.properties ?? {}).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value === null ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value)}</dd></div>)}</dl>{!Object.keys(selected.feature.properties ?? {}).length && <p>Acest obiect nu are atribute.</p>}</section>}
       </main>
-      {layers.find(layer => layer.id === tableId) && <AttributeTable key={tableId} layer={layers.find(layer => layer.id === tableId)} onUpdate={changes => update(tableId, changes)} onSelect={select} onClose={() => setTableId(null)} />}
+      {layers.find(layer => layer.id === tableId) && <AttributeTable key={tableId} layer={layers.find(layer => layer.id === tableId)} canEdit={canEdit} onUpdate={changes => update(tableId, changes)} onSelect={select} onClose={() => setTableId(null)} />}
     </div>
   )
 }
