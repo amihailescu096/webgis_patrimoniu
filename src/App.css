@@ -57,3 +57,19 @@ dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
   .map-caption span { display: none; }
   .details { top: auto; bottom: 25px; left: 10px; right: 10px; width: auto; max-height: 45%; z-index: 600; }
 }
+.table-open { width: 100%; margin-top: 12px; border: 1px solid #dce3eb; background: #eff5ff; color: #3979d5; padding: 9px; border-radius: 6px; font-size: 12px; }
+.attribute-table { position: fixed; z-index: 800; left: 380px; right: 20px; bottom: 25px; height: min(480px, 65dvh); display: flex; flex-direction: column; background: white; border: 1px solid #dce3eb; border-radius: 12px; box-shadow: 0 8px 35px #16273730; padding: 16px; }
+.attribute-table header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.attribute-table button { border: 1px solid #dce3eb; border-radius: 5px; background: #f7f9fc; color: #3979d5; padding: 6px 10px; }
+.attribute-table button:disabled { cursor: default; }
+.table-toolbar { display: flex; gap: 20px; margin: 12px 0; }
+.table-toolbar label { flex: 1; font-size: 12px; }
+.table-scroll { overflow: auto; flex: 1; min-height: 0; }
+.table-scroll table { border-collapse: collapse; font-size: 12px; width: 100%; }
+.table-scroll th { position: sticky; top: 0; background: #edf3fc; text-align: left; }
+.table-scroll th, .table-scroll td { padding: 8px 12px; border: 1px solid #e4e9ef; white-space: nowrap; max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
+.table-scroll td button { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.table-pagination { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding-top: 12px; font-size: 12px; }
+.table-pagination input { width: 65px; padding: 6px; border: 1px solid #dce3eb; }
+.render-status { position: absolute; z-index: 450; bottom: 85px; right: 20px; background: white; border-radius: 6px; padding: 10px; font-size: 12px; }
+@media (max-width: 900px) { .attribute-table { left: 10px; right: 10px; } }

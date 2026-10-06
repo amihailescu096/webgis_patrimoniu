@@ -37,7 +37,28 @@ export function normalizeGeoJSON(value) {
   }
   return { type: 'FeatureCollection', features }
 }
-export function featureName(feature, index) {
+export function featureName(feature, index, field = '') {
   const p = feature.properties ?? {}
+  if (field && p[field] !== null && p[field] !== undefined && String(p[field]).trim() !== '') return String(p[field])
   return String(p.Denumire ?? p.name ?? p.Name ?? p.title ?? feature.id ?? `Obiect ${index + 1}`)
+}
+
+export function layerMetadata(data) {
+  const fields = new Set()
+  const bounds = [Infinity, Infinity, -Infinity, -Infinity]
+  function visit(coords) {
+    if (typeof coords[0] === 'number') {
+      bounds[0] = Math.min(bounds[0], coords[1]); bounds[1] = Math.min(bounds[1], coords[0])
+      bounds[2] = Math.max(bounds[2], coords[1]); bounds[3] = Math.max(bounds[3], coords[0])
+    } else coords.forEach(visit)
+  }
+  function visitGeometry(g) {
+    if (!g) return
+    if (g.type === 'GeometryCollection') g.geometries.forEach(visitGeometry)
+    else visit(g.coordinates)
+  }
+  data.features.forEach(feature => { Object.keys(feature.properties ?? {}).forEach(key => fields.add(key)); visitGeometry(feature.geometry) })
+  const columns = [...fields]
+  const labelField = ['Cod_LMI_main', 'Cod_LMI', 'cod_lmi', 'LMI', 'Denumire', 'name', 'Name', 'title'].map(name => columns.find(column => column.toLowerCase() === name.toLowerCase())).find(Boolean) ?? ''
+  return { columns, labelField, bounds: Number.isFinite(bounds[0]) ? [[bounds[0], bounds[1]], [bounds[2], bounds[3]]] : null }
 }
