@@ -23,7 +23,7 @@ test('accepts all supported geometry types and collections', () => {
   assert.equal(normalizeGeoJSON({ type: 'FeatureCollection', features: [] }).features.length, 0)
 })
 test('rejects invalid input before it reaches Leaflet', () => {
-  for (const input of [null, {}, { type: 'FeatureCollection' }, { type: 'Point', coordinates: [500000, 450000] }, { type: 'Point', coordinates: ['26', 45] }, { type: 'LineString', coordinates: [[26, 45]] }, { type: 'Polygon', coordinates: [[[26, 45], [27, 45], [27, 46], [26, 46]]] }, { type: 'Feature', properties: [], geometry: null }, { type: 'Point', coordinates: [26, 45], crs: { properties: { name: 'EPSG:3857' } } }]) assert.throws(() => normalizeGeoJSON(input))
+  for (const input of [null, {}, { type: 'FeatureCollection' }, { type: 'Point', coordinates: [500000, 450000] }, { type: 'Point', coordinates: ['26', 45] }, { type: 'LineString', coordinates: [[26, 45]] }, { type: 'Polygon', coordinates: [[[26, 45], [27, 45], [26, 45]]] }, { type: 'Feature', properties: [], geometry: null }, { type: 'Point', coordinates: [26, 45], crs: { properties: { name: 'EPSG:3857' } } }]) assert.throws(() => normalizeGeoJSON(input))
 })
 
 test('uses a chosen field, including numeric zero, and falls back on empty values', () => {
@@ -36,4 +36,13 @@ test('collects columns from every row and calculates bounds without Leaflet', ()
   const data = { features: [{ properties: { Cod_LMI: 'BZ-1' }, geometry: { type: 'Point', coordinates: [26, 45] } }, { properties: { late: 1 }, geometry: { type: 'GeometryCollection', geometries: [{ type: 'Point', coordinates: [27, 46] }] } }] }
   assert.deepEqual(layerMetadata(data), { columns: ['Cod_LMI', 'late'], labelField: 'Cod_LMI', bounds: [[45, 26], [46, 27]] })
   assert.equal(layerMetadata({ features: [] }).bounds, null)
+})
+
+test('closes open polygon rings and normalizes closing altitude', () => {
+  const ring = [[26,45],[27,45],[27,46]]
+  normalizeGeoJSON({ type: 'MultiPolygon', coordinates: [[ring]] })
+  assert.deepEqual(ring, [[26,45],[27,45],[27,46],[26,45]])
+  const altitude = [[26,45,1],[27,45,2],[27,46,3],[26,45,9]]
+  normalizeGeoJSON({ type: 'Polygon', coordinates: [altitude] })
+  assert.deepEqual(altitude.at(-1), altitude[0])
 })

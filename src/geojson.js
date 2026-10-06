@@ -22,7 +22,12 @@ function geometry(value) {
   if (lines.some(line => line.length < 2)) throw new Error('O linie necesită cel puțin două poziții.')
   const polygons = value.type === 'Polygon' ? [value.coordinates] : value.type === 'MultiPolygon' ? value.coordinates : []
   for (const polygon of polygons) for (const ring of polygon) {
-    if (ring.length < 4 || JSON.stringify(ring[0]) !== JSON.stringify(ring.at(-1))) throw new Error('Inelele poligoanelor trebuie să fie închise și să aibă cel puțin patru poziții.')
+    const first = ring[0], last = ring.at(-1)
+    const closed = first[0] === last[0] && first[1] === last[1]
+    const vertices = closed ? ring.slice(0, -1) : ring
+    if (new Set(vertices.map(point => `${point[0]},${point[1]}`)).size < 3) throw new Error('Un inel de poligon necesită cel puțin trei puncte distincte. Exportă din QGIS după Repară geometriile.')
+    if (!closed) ring.push([...first])
+    else ring[ring.length - 1] = [...first]
   }
 }
 export function normalizeGeoJSON(value) {
